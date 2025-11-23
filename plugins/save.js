@@ -16,7 +16,7 @@ cmd(
             from,
             quoted,
             reply,
-            // You can destructure more variables if needed, but 'quoted' is the key here
+            // Additional variables can be destructured here if needed
         }
     ) => {
         try {
@@ -25,41 +25,43 @@ cmd(
                 return reply("*Please reply to the Status, One-Time View, or any Media message you want to save/resend!* 🧐");
             }
 
-            // --- Check for Status Media (STORIES) ---
+            // --- Status Media Check ---
             if (quoted.isStatus) {
-                // If it's a status, the media is available in the 'quoted' object
-                // Resend the media with a caption
+                // Status media is usually directly available via quoted.fakeObj
                 
                 await zanta.copyNForward(from, quoted.fakeObj, { 
                     caption: "*✅ Saved and Resent from Status!*",
-                    quoted: mek // Optional: quote the original 'save' message
+                    quoted: mek // Quote the original 'save' message
                 });
                 
                 return reply("*Status media successfully resent!* 🥳");
             }
 
-            // --- Check for One-Time View Media (OTV) ---
+            // --- One-Time View Media Check ---
             if (quoted.isViewOnce) {
-                // OTV media is a special type of message where the content is hidden.
-                // The library provides a way to extract the media from a View Once message (quoted.fakeObj).
-                
-                // Note: The message type (image/video) is in quoted.fakeObj.mtype
+                // One-Time View media is saved by copying the fakeObj
                 
                 await zanta.copyNForward(from, quoted.fakeObj, {
                     caption: "*📸 Saved and Resent from One-Time View!*",
-                    quoted: mek // Optional: quote the original 'save' message
+                    quoted: mek
                 });
                 
                 return reply("*One-Time View media successfully saved and resent!* 💾");
             }
             
-            // --- Check for Regular Media (Image/Video/Audio/Document) ---
-            // This handles any other regular media in the chat that the user wants to resend.
-            if (quoted.mtype.includes('imageMessage') || 
-                quoted.mtype.includes('videoMessage') || 
-                quoted.mtype.includes('audioMessage') || 
-                quoted.mtype.includes('documentMessage')) {
+            // --- Regular Media Check (FIX for TypeError: Cannot read properties of undefined (reading 'includes')) ---
+            
+            // Determine the message type. We check fakeObj first for consistency, 
+            // but use quoted.mtype as a fallback.
+            const repliedMtype = quoted.fakeObj ? quoted.fakeObj.mtype : quoted.mtype;
 
+            if (repliedMtype && (
+                repliedMtype.includes('imageMessage') || 
+                repliedMtype.includes('videoMessage') || 
+                repliedMtype.includes('audioMessage') || 
+                repliedMtype.includes('documentMessage'))) {
+                
+                // Use quoted.fakeObj to forward the media content
                 await zanta.copyNForward(from, quoted.fakeObj, {
                     caption: "*💾 Saved and Resent!*",
                     quoted: mek
