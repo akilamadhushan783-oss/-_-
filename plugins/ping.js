@@ -1,6 +1,9 @@
 const { cmd } = require("../command");
 const os = require('os');
-const { runtime, sleep } = require('../lib/functions'); // Assuming 'runtime' is available here
+const { runtime, sleep } = require('../lib/functions'); 
+
+// ඔබ ලබා දුන් Image URL එක
+const STATUS_IMAGE_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/ChatGPT%20Image%20Nov%2021,%202025,%2001_21_32%20AM.png?raw=true";
 
 // Helper function to format bytes to a readable string
 function bytesToSize(bytes) {
@@ -14,8 +17,8 @@ cmd(
     {
         pattern: "ping",
         react: "⏱️",
-        desc: "Check the bot's response time and display system information.",
-        category: "main",
+        desc: "Check the bot's response time and display system information with an image.",
+        category: "misc",
         filename: __filename,
     },
     async (
@@ -28,25 +31,19 @@ cmd(
         }
     ) => {
         try {
-            // 1. Response Time (Latency) Calculation
+            // 1. Response Time (Latency) Calculation - Start Time
             const startTime = Date.now();
-            await reply("*Pong!* ⚡️ Calculating latency...");
-            const endTime = Date.now();
-            const latency = endTime - startTime;
-
+            // මෙහිදී, අපට image එක යැවිය යුතු බැවින්, මෙය තාවකාලික reply එකක් ලෙස යවමු.
+            await reply("*⏱️ Latency ගණනය කරමින්...*"); 
+            
             // 2. System and Bot Data Collection
-            // Get memory usage of the current Node.js process
             const memoryUsage = process.memoryUsage(); 
-            // Get total system memory and free memory
             const totalMemory = os.totalmem();
             const freeMemory = os.freemem();
             
-            // Note: PM2 specific details (ID, PID, Mode) require a separate PM2 API call 
-            // which is complex to add to a plugin. We will provide standard Node.js/OS data.
-            
             let pm2_details = "";
             
-            // Check if running under PM2 (using common PM2 environment variable)
+            // PM2 runtime තොරතුරු එකතු කිරීම
             if (process.env.NODE_APP_INSTANCE !== undefined) {
                  pm2_details = `
 **⚙️ Process Details (PM2)**
@@ -63,8 +60,11 @@ cmd(
 `;
             }
 
+            // 3. Latency calculation - End Time
+            const endTime = Date.now();
+            const latency = endTime - startTime;
 
-            // 3. Constructing the formatted Reply Message
+            // 4. Constructing the formatted Reply Message (Caption)
             const pingMessage = `
 *╭━━━*「 *ZANTA-MD STATUS* 」*━━━╮*
 *┃ ⏱️ Latency:* ${latency} ms
@@ -77,12 +77,13 @@ cmd(
 *┃ 📊 Total System RAM:* ${bytesToSize(totalMemory)}
 *┃ 📊 Free System RAM:* ${bytesToSize(freeMemory)}
 *╰━━━━━━━━━━━━━━━━━━╯*
-${pm2_details}
 `;
             
-            // 4. Send the final formatted message (replacing the initial "Pong" reply)
-            await zanta.sendMessage(from, { text: pingMessage }, { quoted: mek });
-
+            // 5. Send the final formatted message WITH IMAGE (නිවැරදි කරන ලද නම)
+            await zanta.sendMessage(from, {
+                image: { url: STATUS_IMAGE_URL },
+                caption: pingMessage
+            }, { quoted: mek });
 
         } catch (e) {
             console.error("[PING ERROR]", e);
