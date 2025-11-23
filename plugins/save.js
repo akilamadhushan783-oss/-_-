@@ -3,8 +3,8 @@ const { cmd } = require("../command");
 cmd(
     {
         pattern: "save",
-        react: "✅",
-        desc: "Resend Status or One-Time View Media (Simplified)",
+        react: "🐛", // Debugging emoji
+        desc: "Resend Status or One-Time View Media (Debugging Version)",
         category: "general",
         filename: __filename,
     },
@@ -19,36 +19,35 @@ cmd(
         }
     ) => {
         try {
-            // 1. Reply කර තිබේදැයි පරීක්ෂා කිරීම
             if (!quoted) {
                 return reply("*කරුණාකර ඔබට save කර ගැනීමට අවශ්‍ය Status/Media Message එකකට reply කරන්න!* 🧐");
             }
 
-            // 2. Media Content Container එක ලබා ගැනීම
-            // Status, OTV, සහ සාමාන්‍ය Media සඳහා සත්‍ය content එක බොහෝ විට containedMessage හෝ fakeObj තුළ ඇත.
-            // අපි සත්‍ය media data එක තියෙන object එක සොයා ගනිමු.
-            let mediaMessage = quoted.fakeObj;
+            // ⚠️ DEBUGGING STEP: Print the entire quoted object to the console ⚠️
+            console.log("--- START SAVE.JS DEBUG LOG ---");
+            console.log("QUOTED OBJECT:", JSON.stringify(quoted, null, 2));
+            console.log("--- END SAVE.JS DEBUG LOG ---");
             
-            // 3. Media Data එකක් තිබේදැයි තහවුරු කිරීම
+            // Core logic (Simplified as before)
+            let mediaMessage = quoted.fakeObj;
+            let saveCaption = "*💾 Saved and Resent!*";
+            
             if (!mediaMessage) {
-                // quoted.fakeObj නැතිනම්, එය සැබෑ media message එකක් නොවේ.
-                return reply("*⚠️ Media Content එක හඳුනාගැනීමට නොහැකි විය. එය photo/video Status එකක් බවට සහතික වන්න!*");
+                // This error message is what you keep receiving.
+                return reply("*⚠️ Media Content එක හඳුනාගැනීමට නොහැකි විය. console log එක පරීක්ෂා කර එහි අන්තර්ගතය ලබා දෙන්න.*");
             }
             
-            // 4. Media Type එක තීරණය කිරීම සහ Caption එක සැකසීම
-            let saveCaption = "*💾 Saved and Resent!*";
-
+            // Identify the message type for the caption
             if (quoted.isStatus) {
                 saveCaption = "*✅ Status Media Saved!*";
             } else if (quoted.isViewOnce) {
                  saveCaption = "*📸 One-Time View Saved!*";
             }
             
-            // 5. Media එක Copy කර Forward කිරීම
-            // zanta.copyNForward මගින් mediaMessage එකේ ඇති image, video හෝ වෙනත් media type එක ස්වයංක්‍රීයව හඳුනාගෙන යවයි.
+            // Forward the media
             await zanta.copyNForward(from, mediaMessage, {
                 caption: saveCaption,
-                quoted: mek // 'save' command එකට reply කරමින් යැවීම
+                quoted: mek
             });
 
             return reply("*Media successfully processed and resent!* ✨");
