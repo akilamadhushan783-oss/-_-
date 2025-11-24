@@ -39,17 +39,17 @@ cmd(
             }
 
             // 2. Custom Formatted Header එක
-            let menuText = "╭━─━─━─━─━─━─━─━─━─━╮\n";
+            let menuText = "╭━─━─━─━─━─━─━─━─━╮\n";
             menuText += "┃ 👑 *𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐓𝐎 𝐙𝐀𝐍𝐓𝐀-𝐌𝐃* 🤖\n";
             menuText += "┃   _All Available Commands_\n";
-            menuText += "╰━─━─━─━─━─━─━─━─━─━╯\n\n";
+            menuText += "╰━─━─━─━─━─━─━─━─━╯\n\n";
 
             // 3. Category සහ Commands එකතු කිරීම
             for (const [cat, cmds] of Object.entries(categories)) {
                 
                 // Category Header එක සකස් කිරීම
                 const formattedCat = cat.charAt(0).toUpperCase() + cat.slice(1);
-                menuText += `\n*━━━━━━━━━ 📂 ${formattedCat} Menu ━━━━━━━━━*\n`;
+                menuText += `\n*━━━━ 📂 ${formattedCat} Menu *━━━━\n`;
                 
                 // Commands එකතු කිරීම
                 cmds.forEach(c => {
@@ -77,3 +77,4 @@ cmd(
         }
     }
 );
+
