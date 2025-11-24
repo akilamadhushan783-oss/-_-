@@ -85,12 +85,9 @@ async function connectToWA() {
                 connectToWA();
             }
         } else if (connection === 'open') {
-            console.log('✅ ZANTA-MD connected to WhatsApp');
-
             const up = `> ZANTA-MD connected ✅\n\nPREFIX: ${prefix}`;
-            await zanta.sendMessage(ownerNumber[0] + "@s.whatsapp.net", {
-                image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/ChatGPT%20Image%20Nov%2021,%202025,%2001_21_32%20AM.png?raw=true` },
-                caption: up
+            // 🚨 FIX: Image එක ඉවත් කර Text Message එකක් පමණක් යවයි
+            await zanta.sendMessage(ownerNumber[0] + "@s.whatsapp.net", { text: up });
             });
 
             fs.readdirSync("./plugins/").forEach((plugin) => {
