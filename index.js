@@ -88,8 +88,10 @@ async function connectToWA() {
             console.log('✅ ZANTA-MD connected to WhatsApp');
 
             const up = `> ZANTA-MD connected ✅\n\nPREFIX: ${prefix}`;
-            // Welcome Message - Text Only (Image Error Fix)
-            await zanta.sendMessage(ownerNumber[0] + "@s.whatsapp.net", { text: up });
+            await zanta.sendMessage(ownerNumber[0] + "@s.whatsapp.net", {
+                image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/ChatGPT%20Image%20Nov%2021,%202025,%2001_21_32%20AM.png?raw=true` },
+                caption: up
+            });
 
             fs.readdirSync("./plugins/").forEach((plugin) => {
                 if (path.extname(plugin).toLowerCase() === ".js") {
