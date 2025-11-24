@@ -28,7 +28,7 @@ function loadCommands() {
         cats: ['owner', 'private'], // 'owner' හෝ 'private' යන categories වල commands
         emoji: '👑' 
     };
-    commandCategories['2'] = { 
+    commandCategories['5'] = { 
         name: "Group Menu", 
         cats: ['group', 'admin'], // 'group' හෝ 'admin' යන categories වල commands
         emoji: '👥' 
@@ -43,7 +43,7 @@ function loadCommands() {
         cats: ['search', 'tools', 'misc'], // 'search' හෝ 'tools' යන categories වල commands
         emoji: '🔍' 
     };
-    commandCategories['5'] = { 
+    commandCategories['2'] = { 
         name: "General & Other", 
         cats: ['main', 'misc', 'other'], // 'main', 'misc', 'other' යන categories වල commands
         emoji: '📝' 
@@ -145,3 +145,4 @@ cmd(
         }
     }
 );
+
