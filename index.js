@@ -30,6 +30,7 @@ const prefix = '.';
 const ownerNumber = ['94743404814'];
 const credsPath = path.join(__dirname, '/auth_info_baileys/creds.json');
 
+// Session ID එක වෙනස් නොකරන ලෙස ඔබ කළ ඉල්ලීම පරිදි, MEGA Logic එක මෙහි තබනවා.
 async function ensureSessionFile() {
     if (!fs.existsSync(credsPath)) {
         if (!config.SESSION_ID) {
@@ -69,7 +70,7 @@ async function connectToWA() {
 
     const zanta = makeWASocket({
         logger: P({ level: 'info' }),
-        printQRInTerminal: false,
+        printQRInTerminal: false, // Session Restore කරන නිසා QR Code පෙන්වන්නේ නැහැ.
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
@@ -78,11 +79,24 @@ async function connectToWA() {
         generateHighQualityLinkPreview: true,
     });
 
+    // 👈 1. Message Cache Map එක initialize කිරීම (Antidelete සඳහා අත්‍යවශ්‍යයි)
+    zanta.messages = new Map();
+
     zanta.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update; // qr ද ලබා ගන්න
+        
+        // QR Code Logic (Session නැතිනම්)
+        if (qr) {
+             qrcode.generate(qr, { small: true });
+             console.log("SCAN THE QR CODE ABOVE TO CONNECT!");
+        }
+
         if (connection === 'close') {
+            // DisconnectReason.loggedOut වූ විට නැවත සම්බන්ධ නොවිය යුතුයි.
             if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
                 connectToWA();
+            } else {
+                 console.log('🤖 Connection logged out. Delete session files and restart the bot to scan a new QR code.');
             }
         } else if (connection === 'open') {
             console.log('✅ ZANTA-MD connected to WhatsApp');
@@ -95,18 +109,36 @@ async function connectToWA() {
 
             fs.readdirSync("./plugins/").forEach((plugin) => {
                 if (path.extname(plugin).toLowerCase() === ".js") {
-                    require(`./plugins/${plugin}`);
+                    const pluginModule = require(`./plugins/${plugin}`);
+                    
+                    // Antidelete වැනි Event Listeners සඳහා Module Export කර ඇත්නම් එය ක්‍රියාත්මක කිරීම
+                    if (typeof pluginModule === 'function') {
+                        pluginModule(zanta);
+                    }
                 }
             });
         }
     });
 
     zanta.ev.on('creds.update', saveCreds);
+    
+    // 👈 2. Messages Delete Event Listener එක Load කිරීම
+    // Antidelete.js file එකෙන් event listener එක load කිරීමට, එහි module.exports = zanta => {...} ලෙස තිබිය යුතුයි. 
+    // නැතහොත්, ඔබගේ antidelete.js file එකේ logic එක මෙහිදී සෘජුවම ඇතුළත් කළ යුතුයි. (දැනට plugin loader එක මත රඳා පවතී.)
 
     zanta.ev.on('messages.upsert', async ({ messages }) => {
         for (const msg of messages) {
             if (msg.messageStubType === 68) {
                 await zanta.sendMessageAck(msg.key);
+            }
+            
+            // 👈 3. Message Cache එක Update කිරීම (Antidelete Logic සඳහා)
+            if (msg.key.id && !msg.key.fromMe && msg.key.remoteJid !== 'status@broadcast') {
+                 zanta.messages.set(msg.key.id, msg);
+                 // Cache එකේ ප්‍රමාණය පාලනය කිරීම (අවශ්‍ය නම්)
+                 if (zanta.messages.size > 200) {
+                     zanta.messages.delete(zanta.messages.keys().next().value);
+                 }
             }
         }
 
