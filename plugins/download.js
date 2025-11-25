@@ -1,6 +1,6 @@
 const { cmd, commands } = require("../command");
 const axios = require('axios');
-const tiktokdl = require("tiktok-dl"); // TikTok Downloader සඳහා
+const tiktokdl = require("@faouzkk/tiktok-dl"); // TikTok Downloader සඳහා
 
 // --- ⚙️ Helper Functions ---
 
