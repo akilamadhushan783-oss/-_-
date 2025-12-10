@@ -16,7 +16,7 @@ cmd(
     {
         pattern: "apk",
         react: "📦",
-        desc: "Download file from a direct APK link.",
+        desc: "Download APK File.",
         category: "download",
         filename: __filename,
     },
@@ -59,7 +59,7 @@ cmd(
         pattern: "tiktok",
         alias: ["ttdl"],
         react: "🕺",
-        desc: "Download TikTok Video (No Watermark)",
+        desc: "TikTok Video (No Watermark)",
         category: "download",
         filename: __filename,
     },
