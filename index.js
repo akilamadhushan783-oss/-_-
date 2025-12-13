@@ -258,13 +258,7 @@ if (isStatusUpdate && !isMyStatus) {
         await danuwa.sendMessage(statusKey.participant, { 
             react: {
                 text: '❤️', // Heart emoji
-                // Key Structure එක පැහැදිලිව සඳහන් කිරීම
-                key: {
-                    remoteJid: statusKey.remoteJid, // status@broadcast
-                    id: statusKey.id,
-                    participant: statusKey.participant,
-                    fromMe: false, // මෙය අනෙක් පුද්ගලයාගේ Status එකක් නිසා false විය යුතුයි
-                }
+                key: statusKey // සම්පූර්ණ Status Key එක භාවිතා කරයි
             }
         });
         console.log(`✅ Status reacted with ❤️ to: ${statusKey.participant}`);
