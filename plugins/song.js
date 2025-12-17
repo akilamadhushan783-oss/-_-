@@ -43,7 +43,7 @@ cmd({
 
         const songData = await ytmp3(data.url, "192");
 
-        await zanta.sendMessage(from, { text: "✅ *Download Completed! Sending...*", edit: loading.key });
+        await zanta.sendMessage(from, { text: "✅ *Download Completed!*", edit: loading.key });
 
         await zanta.sendMessage(from, {
             audio: { url: songData.download.url },
