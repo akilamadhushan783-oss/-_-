@@ -1,97 +1,59 @@
-const { cmd, commands } = require("../command");
+const { cmd } = require("../command");
 const yts = require("yt-search");
 const { ytmp3 } = require("@vreden/youtube_scraper");
-const config = require("../config"); // BOT_NAME ලබා ගැනීමට
 
-cmd(
-  {
+cmd({
     pattern: "song",
     react: "🎶",
-    desc: "Download Song",
+    desc: "Download MP3 Songs (Up to 60 min).",
     category: "download",
     filename: __filename,
-  },
-  async (
-    zanta,
-    mek,
-    m,
-    {
-      from,
-      quoted,
-      body,
-      isCmd,
-      command,
-      args,
-      q,
-      isGroup,
-      sender,
-      senderNumber,
-      botNumber2,
-      botNumber,
-      pushname,
-      isMe,
-      isOwner,
-      groupMetadata,
-      groupName,
-      participants,
-      groupAdmins,
-      isBotAdmins,
-      isAdmins,
-      reply,
-    }
-  ) => {
+}, async (zanta, mek, m, { from, reply, q }) => {
     try {
-      if (!q) return reply("❌ *Please provide a song name or YouTube link*");
+        if (!q) return reply("❌ *කරුණාකර සින්දුවේ නම හෝ YouTube ලින්ක් එක ලබා දෙන්න.*");
 
-      const search = await yts(q);
-      const data = search.videos[0];
-      const url = data.url;
-      const botName = config.BOT_NAME || "ZANTA-MD"; 
+        const loading = await zanta.sendMessage(from, { text: "🔍 *Searching for your song...*" }, { quoted: mek });
 
-      let desc = `
+        const search = await yts(q);
+        const data = search.videos[0];
+        if (!data) return await zanta.sendMessage(from, { text: "❌ *සින්දුව සොයාගත නොහැකි විය.*", edit: loading.key });
+
+        const botName = global.CURRENT_BOT_SETTINGS.botName;
+
+        // කාලය පරීක්ෂා කිරීම (විනාඩි 60 = තත්පර 3600)
+        let durationParts = data.timestamp.split(":").map(Number);
+        let seconds = durationParts.length === 3 ? (durationParts[0] * 3600 + durationParts[1] * 60 + durationParts[2]) : (durationParts[0] * 60 + durationParts[1]);
+
+        if (seconds > 3600) {
+            return await zanta.sendMessage(from, { text: "⏳ *සමාවන්න, විනාඩි 60 ට වැඩි Audio දැනට සහය නොදක්වයි.*", edit: loading.key });
+        }
+
+        let desc = `
 ╭━─━─━─━─━─━─━─━╮
-┃*${botName} Song downloader*
+┃ *${botName} SONG DOWNLOADER*
 ╰━─━─━─━─━─━─━─━╯
 
 🎬 *Title:* ${data.title}
 ⏱️ *Duration:* ${data.timestamp}
 📅 *Uploaded:* ${data.ago}
 👀 *Views:* ${data.views.toLocaleString()}
-🔗 *Watch Here:* ${data.url}
+
+> *Downloading audio... Please wait.*
 `;
 
-      await zanta.sendMessage(
-        from,
-        { image: { url: data.thumbnail }, caption: desc },
-        { quoted: mek }
-      );
+        await zanta.sendMessage(from, { image: { url: data.thumbnail }, caption: desc }, { quoted: mek });
 
-      const quality = "192";
-      const songData = await ytmp3(url, quality);
+        const songData = await ytmp3(data.url, "192");
 
-      let durationParts = data.timestamp.split(":").map(Number);
-      let totalSeconds =
-        durationParts.length === 3
-          ? durationParts[0] * 3600 + durationParts[1] * 60 + durationParts[2]
-          : durationParts[0] * 60 + durationParts[1];
+        await zanta.sendMessage(from, { text: "✅ *Download Completed! Sending...*", edit: loading.key });
 
-      if (totalSeconds > 1800) {
-        return reply("⏳ *Sorry, audio files longer than 30 minutes are not supported.*");
-      }
+        await zanta.sendMessage(from, {
+            audio: { url: songData.download.url },
+            mimetype: "audio/mpeg",
+        }, { quoted: mek });
 
-      await zanta.sendMessage(
-        from,
-        {
-          audio: { url: songData.download.url },
-          mimetype: "audio/mpeg",
-        },
-        { quoted: mek }
-      );
-
-      return reply("> *වැඩේ හරි 🙃✅*");
     } catch (e) {
-      console.log(e);
-      reply(`❌ *Error:* ${e.message} 😞`);
+        console.error(e);
+        reply(`❌ *Error:* ${e.message}`);
     }
-  }
-);
+});
