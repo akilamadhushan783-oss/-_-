@@ -1,182 +1,208 @@
-const { cmd, commands } = require("../command");
+const { cmd } = require("../command");
 const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg'); // fluent-ffmpeg dependency එක අවශ්‍යයි
+const path = require('path');
+const ffmpegPath = require('ffmpeg-static');
+const ffmpeg = require('fluent-ffmpeg');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const axios = require('axios');
+const FormData = require('form-data');
 
-// --- Helper function to determine media type from quoted message ---
-const getMediaType = (quoted) => {
-    let mediaType = quoted.mtype;
-    let isSticker = mediaType === 'stickerMessage';
-    let isImage = mediaType === 'imageMessage';
-    let isVideo = mediaType === 'videoMessage';
-    
-    // View Once messages හසුරුවයි
-    if (quoted.msg && quoted.msg.viewOnce) {
-        const messageKeys = Object.keys(quoted.msg.message);
-        if (messageKeys.includes('imageMessage')) isImage = true;
-        if (messageKeys.includes('videoMessage')) isVideo = true;
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+const tempDir = path.join(__dirname, '../temp');
+if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+// 🗝️ Remove.bg API Key (Get from remove.bg)
+const REMOVE_BG_API_KEY = "YOUR_REMOVEBG_API_KEY"; 
+
+/**
+ * Media බාගත කිරීමේ ක්‍රියාවලිය
+ */
+const downloadMedia = async (message, type) => {
+    try {
+        const stream = await downloadContentFromMessage(message, type);
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+        return buffer;
+    } catch (e) {
+        return null;
     }
-    
-    return { isSticker, isImage, isVideo, mediaType };
 };
 
-// --- 1. STICKER to MEDIA (toimg/tovid) ---
-cmd(
-  {
-    pattern: "toimg",
-    alias: ["tovid"],
-    react: "🖼️",
-    desc: "Converts sticker to img",
-    category: "convert",
-    filename: __filename,
-  },
-  async (zanta, mek, m, { from, reply, quoted }) => {
-    try {
-      if (!quoted) return reply("*Please reply to a sticker!* 🖼️");
-      
-      const { isSticker } = getMediaType(quoted);
-      if (!isSticker) return reply("*The message you replied to is not a Sticker!* ❌");
-
-      reply("*Converting sticker to media...* ⏳");
-
-      const mediaBuffer = await zanta.downloadMediaMessage(quoted);
-      const isAnimated = quoted.msg.isAnimated;
-      
-      if (!isAnimated) {
-          // Send as Image
-          await zanta.sendMessage(
-              from, 
-              { image: mediaBuffer, caption: `*🖼️ Converted from Sticker (Image)*` }, 
-              { quoted: mek }
-          );
-      } else {
-          // Send as Video (Animated Sticker)
-          await zanta.sendMessage(
-              from, 
-              { video: mediaBuffer, caption: `*🎥 Converted from Sticker (Video)*` }, 
-              { quoted: mek }
-          );
-      }
-
-      return reply("> *වැඩේ හරි 🙃✅*");
-      
-    } catch (e) {
-      console.error(e);
-      reply(`*Error converting sticker:* ${e.message || e}`);
+/**
+ * Media Type එක හරියටම සොයාගැනීමේ logic එක (Deep Search)
+ */
+const getMedia = (quoted) => {
+    if (!quoted) return null;
+    let msg = quoted.message || quoted.msg || quoted;
+    
+    if (msg.imageMessage) return { data: msg.imageMessage, type: 'image' };
+    if (msg.videoMessage) return { data: msg.videoMessage, type: 'video' };
+    if (msg.stickerMessage) return { data: msg.stickerMessage, type: 'sticker' };
+    
+    let context = msg.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (context) {
+        if (context.imageMessage) return { data: context.imageMessage, type: 'image' };
+        if (context.videoMessage) return { data: context.videoMessage, type: 'video' };
+        if (context.stickerMessage) return { data: context.stickerMessage, type: 'sticker' };
     }
-  }
-);
+    
+    if (quoted.imageMessage) return { data: quoted.imageMessage, type: 'image' };
+    if (quoted.videoMessage) return { data: quoted.videoMessage, type: 'video' };
+    if (quoted.stickerMessage) return { data: quoted.stickerMessage, type: 'sticker' };
+    
+    return null;
+};
 
-
-// --- 2. MEDIA to STICKER (s) ---
-cmd(
-  {
+// 1. 🖼️ IMAGE/VIDEO TO STICKER (.s)
+cmd({
     pattern: "s",
     alias: ["sticker", "st"],
     react: "🌟",
-    desc: "Converts a sticker.",
     category: "convert",
     filename: __filename,
-  },
-  async (zanta, mek, m, { from, reply, quoted }) => {
+}, async (zanta, mek, m, { from, reply, quoted }) => {
     try {
-      if (!quoted) return reply("*Please reply to an image or video!* 🌟");
-      
-      const { isImage, isVideo } = getMediaType(quoted);
-      // Video is limited to 15 seconds for sticker conversion
-      if (!isImage && (!isVideo || (isVideo && quoted.msg.seconds > 15))) {
-          return reply("*Reply to an Image or a short Video (max 15s) to make a sticker!* ❌");
-      }
+        let media = getMedia(quoted);
+        if (!media || (media.type !== 'image' && media.type !== 'video')) return reply("*කරුණාකර ඡායාරූපයකට හෝ වීඩියෝවකට Reply කරන්න!* ❌");
 
-      reply("*Creating sticker...* ⏳");
-      
-      const mediaBuffer = await zanta.downloadMediaMessage(quoted);
+        reply("*ස්ටිකර් එක සාදමින් පවතී...* ⏳");
+        const buffer = await downloadMedia(media.data, media.type);
+        const inPath = path.join(tempDir, `temp_${Date.now()}`);
+        const outPath = path.join(tempDir, `st_${Date.now()}.webp`);
+        fs.writeFileSync(inPath, buffer);
 
-      await zanta.sendImageAsSticker(from, mediaBuffer, mek, { packname: "ZANTA", author: "Sticker Bot" });
+        ffmpeg(inPath)
+            .on('end', async () => {
+                await zanta.sendMessage(from, { sticker: fs.readFileSync(outPath), packname: "ZANTA-MD", author: "Sticker-Bot" }, { quoted: mek });
+                fs.unlinkSync(inPath); fs.unlinkSync(outPath);
+            })
+            .on('error', (e) => { reply("Error!"); fs.unlinkSync(inPath); })
+            .addOutputOptions(["-vcodec", "libwebp", "-vf", "scale=320:320:force_original_aspect_ratio=decrease,pad=320:320:(320-iw)/2:(320-ih)/2:color=white@0.0"])
+            .save(outPath);
+    } catch (e) { reply("Error!"); }
+});
 
-      return reply("> *වැඩේ හරි 🙃✅*");
-      
-    } catch (e) {
-      console.error(e);
-      reply(`*Error creating sticker:* ${e.message || e}`);
-    }
-  }
-);
+// 2. 🎡 STICKER TO IMAGE (.toimg)
+cmd({
+    pattern: "toimg",
+    react: "🖼️",
+    category: "convert",
+    filename: __filename,
+}, async (zanta, mek, m, { from, reply, quoted }) => {
+    try {
+        let media = getMedia(quoted);
+        if (!media || media.type !== 'sticker') return reply("*කරුණාකර ස්ටිකර් එකකට Reply කරන්න!* ❌");
 
+        reply("*පින්තූරය ලබාගනිමින් පවතී...* ⏳");
+        const buffer = await downloadMedia(media.data, 'sticker');
+        const inPath = path.join(tempDir, `st_in_${Date.now()}.webp`);
+        const outPath = path.join(tempDir, `img_${Date.now()}.png`);
+        fs.writeFileSync(inPath, buffer);
 
-// --- 3. VIDEO to MP3 (tomp3) ---
-cmd(
-  {
+        ffmpeg(inPath)
+            .on('end', async () => {
+                await zanta.sendMessage(from, { image: fs.readFileSync(outPath), caption: "> *ZANTA-MD Convert*" }, { quoted: mek });
+                fs.unlinkSync(inPath); fs.unlinkSync(outPath);
+            })
+            .save(outPath);
+    } catch (e) { reply("Error!"); }
+});
+
+// 3. 🎶 VIDEO TO MP3 (.tomp3)
+cmd({
     pattern: "tomp3",
     alias: ["toaudio"],
     react: "🎶",
-    desc: "Converts video to mp3.",
     category: "convert",
     filename: __filename,
-  },
-  async (zanta, mek, m, { from, reply, quoted }) => {
+}, async (zanta, mek, m, { from, reply, quoted }) => {
     try {
-      if (!quoted) return reply("*Please reply to a video!* 🎶");
-      
-      const { isVideo } = getMediaType(quoted);
-      if (!isVideo) return reply("*The message you replied to is not a Video!* ❌");
+        let media = getMedia(quoted);
+        if (!media || media.type !== 'video') return reply("*වීඩියෝවකට Reply කරන්න!* ❌");
 
-      // Check video duration limit (max 5 minutes for conversion)
-      if (quoted.msg.seconds > 300) { 
-          return reply("*Video is too long for conversion (Max 5 minutes allowed).* 😞");
-      }
+        reply("*MP3 එක සාදමින් පවතී...* ⏳");
+        const buffer = await downloadMedia(media.data, 'video');
+        const inPath = path.join(tempDir, `vid_${Date.now()}.mp4`);
+        const outPath = path.join(tempDir, `aud_${Date.now()}.mp3`);
+        fs.writeFileSync(inPath, buffer);
 
-      reply("*Converting video to MP3... This may take time.* ⏳");
-      
-      const inputPath = `./temp/${m.sender.split('@')[0]}_input.mp4`;
-      const outputPath = `./temp/${m.sender.split('@')[0]}_output.mp3`;
+        ffmpeg(inPath).toFormat('mp3').audioBitrate('128k')
+            .on('end', async () => {
+                await zanta.sendMessage(from, { audio: fs.readFileSync(outPath), mimetype: 'audio/mpeg', fileName: `ZANTA.mp3` }, { quoted: mek });
+                fs.unlinkSync(inPath); fs.unlinkSync(outPath);
+            })
+            .on('error', () => { if (fs.existsSync(inPath)) fs.unlinkSync(inPath); })
+            .save(outPath);
+    } catch (e) { reply("Error!"); }
+});
 
-      // 1. Ensure temp directory exists 
-      if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+// 4. 🔗 MEDIA TO URL (.tourl)
+cmd({
+    pattern: "tourl",
+    alias: ["url"],
+    react: "🔗",
+    category: "convert",
+    filename: __filename,
+}, async (zanta, mek, m, { from, reply, quoted }) => {
+    try {
+        let media = getMedia(quoted);
+        if (!media || (media.type !== 'image' && media.type !== 'video')) return reply("*Media එකකට Reply කරන්න!* ❌");
 
-      // 2. Download the video
-      const mediaBuffer = await zanta.downloadMediaMessage(quoted);
-      fs.writeFileSync(inputPath, mediaBuffer);
+        reply("*URL එක සාදමින් පවතී...* ⏳");
+        const buffer = await downloadMedia(media.data, media.type);
+        const form = new FormData();
+        form.append('fileToUpload', buffer, 'zanta.jpg');
+        form.append('reqtype', 'fileupload');
 
-      // 3. Convert using fluent-ffmpeg
-      ffmpeg(inputPath)
-        .noVideo() // Process only the audio stream
-        .audioCodec('libmp3lame')
-        .save(outputPath)
-        .on('error', (err) => {
-          // Cleanup temporary files
-          if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-          if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-          console.error(`FFmpeg Conversion Error: ${err.message}`);
-          reply(`*FFmpeg Conversion Error:* ${err.message}`);
-        })
-        .on('end', async () => {
-          try {
-            // 4. Send the MP3
-            await zanta.sendMessage(
-              from,
-              { 
-                  audio: fs.readFileSync(outputPath), 
-                  mimetype: 'audio/mp3', 
-                  fileName: 'converted.mp3' 
-              },
-              { quoted: mek, ptt: false } // ptt: false ensures it's sent as a regular audio file
-            );
+        const res = await axios.post('https://catbox.moe/user/api.php', form, { headers: form.getHeaders() });
+        reply(`*🔗 Media URL:* \n${res.data}`);
+    } catch (e) { reply("*Error uploading media!*"); }
+});
 
-            // 5. Final Cleanup
-            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-            return reply("> *වැඩේ හරි 🙃✅*");
+// 5. 🏁 TEXT TO QR (.toqr)
+cmd({
+    pattern: "toqr",
+    react: "🏁",
+    category: "convert",
+    filename: __filename,
+}, async (zanta, mek, m, { from, reply, args }) => {
+    try {
+        let text = args.join(" ");
+        if (!text) return reply("*වචනයක් හෝ ලින්ක් එකක් ලබාදෙන්න!* ❌");
+        let qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(text)}`;
+        await zanta.sendMessage(from, { image: { url: qrUrl }, caption: `*QR for:* ${text}` }, { quoted: mek });
+    } catch (e) { reply("Error!"); }
+});
 
-          } catch (sendError) {
-              console.error("Error sending or cleaning up MP3:", sendError);
-              reply(`*Error sending MP3:* ${sendError.message}`);
-          }
+// 6. ✂️ REMOVE BG (.removebg)
+cmd({
+    pattern: "removebg",
+    alias: ["rmbg"],
+    react: "✂️",
+    category: "convert",
+    filename: __filename,
+}, async (zanta, mek, m, { from, reply, quoted }) => {
+    try {
+        let media = getMedia(quoted);
+        if (!media || media.type !== 'image') return reply("*ඡායාරූපයකට Reply කරන්න!* ❌");
+        if (REMOVE_BG_API_KEY === "YOUR_REMOVEBG_API_KEY") return reply("*කරුණාකර API Key එක ඇතුළත් කරන්න!*");
+
+        reply("*පසුබිම ඉවත් කරමින් පවතී...* ⏳");
+        const buffer = await downloadMedia(media.data, 'image');
+        const form = new FormData();
+        form.append('size', 'auto');
+        form.append('image_file', buffer, 'file.jpg');
+
+        const res = await axios.post('https://api.remove.bg/v1.0/removebg', form, {
+            headers: { ...form.getHeaders(), 'X-Api-Key': REMOVE_BG_API_KEY },
+            responseType: 'arraybuffer'
         });
-      
-    } catch (e) {
-      console.error(e);
-      reply(`*Error converting to MP3:* ${e.message || e}`);
-    }
-  }
-);
 
+        await zanta.sendMessage(from, { image: Buffer.from(res.data), caption: "> *Background Removed*" }, { quoted: mek });
+    } catch (e) { reply("*Error! API Limit එක අවසන් වී තිබිය හැක.*"); }
+});
+
+module.exports = {};
